@@ -1,0 +1,123 @@
+import pygame
+
+from jogo import config as cfg
+
+
+def desenhar_texto(surface, text, pos, font, color=cfg.COR_TEXTO, align="left"):
+    text_surface = font.render(text, True, color)
+    rect = text_surface.get_rect()
+    if align == "center":
+        rect.center = pos
+    elif align == "right":
+        rect.midright = pos
+    else:
+        rect.topleft = pos
+    surface.blit(text_surface, rect)
+    return rect
+
+
+def quebrar_texto(font, text, max_width):
+    palavras = text.split()
+    linhas = []
+    linha = ""
+    for palavra in palavras:
+        teste = f"{linha} {palavra}".strip()
+        if font.size(teste)[0] <= max_width:
+            linha = teste
+        else:
+            if linha:
+                linhas.append(linha)
+            linha = palavra
+    if linha:
+        linhas.append(linha)
+    return linhas
+
+
+class Botao:
+    def __init__(self, x, y, largura, altura, texto, cor=(72, 160, 255), texto_cor=(255, 255, 255), callback=None, font=None, radius=18):
+        self.rect = pygame.Rect(x, y, largura, altura)
+        self.texto = texto
+        self.cor = cor
+        self.texto_cor = texto_cor
+        self.callback = callback
+        self.font = font
+        self.radius = radius
+        self.hover = False
+
+    def atualizar(self, mouse_pos):
+        self.hover = self.rect.collidepoint(mouse_pos)
+
+    def desenhar(self, surface):
+        cor = tuple(max(0, min(255, valor + (15 if self.hover else 0))) for valor in self.cor)
+        pygame.draw.rect(surface, cor, self.rect, border_radius=self.radius)
+        pygame.draw.rect(surface, (255, 255, 255, 70), self.rect, 2, border_radius=self.radius)
+        texto = self.font.render(self.texto, True, self.texto_cor)
+        texto_rect = texto.get_rect(center=self.rect.center)
+        surface.blit(texto, texto_rect)
+
+    def clicar(self):
+        if self.callback:
+            self.callback()
+
+
+class Cartao:
+    def __init__(self, x, y, largura, altura, titulo="", cor_fundo=cfg.COR_CARD, radius=25):
+        self.rect = pygame.Rect(x, y, largura, altura)
+        self.titulo = titulo
+        self.cor_fundo = cor_fundo
+        self.radius = radius
+
+    def desenhar(self, surface, titulo_size=28):
+        pygame.draw.rect(surface, self.cor_fundo, self.rect, border_radius=self.radius)
+        pygame.draw.rect(surface, cfg.COR_BORDA, self.rect, 2, border_radius=self.radius)
+        if self.titulo:
+            titulo_font = pygame.font.SysFont("arial", titulo_size, bold=True)
+            desenhar_texto(surface, self.titulo, (self.rect.x + 28, self.rect.y + 20), titulo_font, cfg.COR_TEXTO)
+
+
+class BarraCronometro:
+    def __init__(self, x, y, largura, altura=18):
+        self.rect = pygame.Rect(x, y, largura, altura)
+        self.valor = 1.0
+
+    def atualizar(self, percentual):
+        self.valor = max(0.0, min(1.0, percentual))
+
+    def desenhar(self, surface):
+        contorno = pygame.Rect(self.rect)
+        pygame.draw.rect(surface, (50, 60, 77), contorno, border_radius=10)
+        largura_atual = int(self.rect.width * self.valor)
+        rect_interno = pygame.Rect(self.rect.x, self.rect.y, largura_atual, self.rect.height)
+        cor = cfg.COR_SUCESSO if self.valor > 0.5 else cfg.COR_AVISO if self.valor > 0.2 else cfg.COR_ERRO
+        pygame.draw.rect(surface, cor, rect_interno, border_radius=10)
+
+
+class DiagramaVenn:
+    def __init__(self, x, y, largura, altura, nome_a="A", nome_b="B"):
+        self.x = x
+        self.y = y
+        self.largura = largura
+        self.altura = altura
+        self.nome_a = nome_a
+        self.nome_b = nome_b
+
+    def desenhar(self, surface, destaque=None):
+        cx = self.x + self.largura // 2
+        cy = self.y + self.altura // 2
+        raio_x = self.largura // 3
+        raio_y = self.altura // 2 - 18
+
+        circulo_a = pygame.draw.circle(surface, (79, 146, 255, 90), (cx - 60, cy), raio_x, 2)
+        circulo_b = pygame.draw.circle(surface, (255, 118, 117, 90), (cx + 60, cy), raio_x, 2)
+        pygame.draw.circle(surface, (79, 146, 255), (cx - 60, cy), raio_x, 2)
+        pygame.draw.circle(surface, (255, 118, 117), (cx + 60, cy), raio_x, 2)
+
+        font = pygame.font.SysFont("arial", 24, bold=True)
+        desenhar_texto(surface, self.nome_a, (cx - 150, cy - 190), font, (147, 196, 255))
+        desenhar_texto(surface, self.nome_b, (cx + 80, cy - 190), font, (255, 164, 164))
+
+        if destaque == "intersecao":
+            overlap = pygame.Rect(cx - 70, cy - 90, 140, 180)
+            pygame.draw.rect(surface, (255, 255, 255, 40), overlap, 1)
+        elif destaque == "uniao":
+            pygame.draw.rect(surface, (255, 255, 255, 20), pygame.Rect(cx - 180, cy - 110, 360, 210), 1)
