@@ -1,0 +1,32 @@
+import os
+
+LARGURA = 1100
+ALTURA = 720
+FPS = 60
+
+COR_BG = (9, 13, 22)
+COR_PANEL = (19, 27, 38)
+COR_CARD = (28, 41, 58)
+COR_CARD_2 = (36, 51, 73)
+COR_TEXTO = (241, 245, 255)
+COR_MUTED = (163, 182, 204)
+COR_PRIMARIA = (73, 170, 255)
+COR_SECUNDARIA = (142, 94, 255)
+COR_SUCESSO = (62, 201, 134)
+COR_ERRO = (236, 102, 92)
+COR_AVISO = (255, 189, 86)
+COR_BORDA = (99, 116, 146)
+
+ARQUIVO_RECORDE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "recorde.json")
+
+
+def imagem(nome_arquivo):
+    if not nome_arquivo:
+        return ""
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "images", nome_arquivo)
+
+
+def som(nome_arquivo):
+    if not nome_arquivo:
+        return ""
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "sounds", nome_arquivo)
