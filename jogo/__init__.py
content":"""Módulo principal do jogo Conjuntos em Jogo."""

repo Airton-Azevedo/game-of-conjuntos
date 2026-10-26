@@ -2,8 +2,7 @@
 """
 Conjuntos em Jogo
 =================
-Quiz educativo de Matemática Discreta sobre definição de conjuntos,
-união, interseção, complemento e subconjuntos.
+Quiz educativo de Matemática Discreta.
 
 Execute com:
     python main.py
@@ -33,7 +32,6 @@ class Jogo:
         self.recorde = self._ler_recorde()
         self.novo_recorde = False
         self.sons = self._carregar_sons()
-
         self.tela_atual = TelaMenu(self)
 
     def _carregar_sons(self):
@@ -43,12 +41,13 @@ class Jogo:
                 pygame.mixer.init()
             for nome in ("clique", "acerto", "erro", "fim", "tempo"):
                 caminho = cfg.som(nome + ".wav")
-                if caminho and os.path.exists(caminho):
-                    som = pygame.mixer.Sound(caminho)
-                    som.set_volume(0.55 if nome != "clique" else 0.35)
-                    sons[nome] = som
+                if not caminho or not os.path.exists(caminho):
+                    continue
+                som = pygame.mixer.Sound(caminho)
+                som.set_volume(0.55 if nome != "clique" else 0.35)
+                sons[nome] = som
         except (pygame.error, OSError):
-            sons = {}
+            return {}
         return sons
 
     def _ler_recorde(self):
@@ -134,5 +133,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

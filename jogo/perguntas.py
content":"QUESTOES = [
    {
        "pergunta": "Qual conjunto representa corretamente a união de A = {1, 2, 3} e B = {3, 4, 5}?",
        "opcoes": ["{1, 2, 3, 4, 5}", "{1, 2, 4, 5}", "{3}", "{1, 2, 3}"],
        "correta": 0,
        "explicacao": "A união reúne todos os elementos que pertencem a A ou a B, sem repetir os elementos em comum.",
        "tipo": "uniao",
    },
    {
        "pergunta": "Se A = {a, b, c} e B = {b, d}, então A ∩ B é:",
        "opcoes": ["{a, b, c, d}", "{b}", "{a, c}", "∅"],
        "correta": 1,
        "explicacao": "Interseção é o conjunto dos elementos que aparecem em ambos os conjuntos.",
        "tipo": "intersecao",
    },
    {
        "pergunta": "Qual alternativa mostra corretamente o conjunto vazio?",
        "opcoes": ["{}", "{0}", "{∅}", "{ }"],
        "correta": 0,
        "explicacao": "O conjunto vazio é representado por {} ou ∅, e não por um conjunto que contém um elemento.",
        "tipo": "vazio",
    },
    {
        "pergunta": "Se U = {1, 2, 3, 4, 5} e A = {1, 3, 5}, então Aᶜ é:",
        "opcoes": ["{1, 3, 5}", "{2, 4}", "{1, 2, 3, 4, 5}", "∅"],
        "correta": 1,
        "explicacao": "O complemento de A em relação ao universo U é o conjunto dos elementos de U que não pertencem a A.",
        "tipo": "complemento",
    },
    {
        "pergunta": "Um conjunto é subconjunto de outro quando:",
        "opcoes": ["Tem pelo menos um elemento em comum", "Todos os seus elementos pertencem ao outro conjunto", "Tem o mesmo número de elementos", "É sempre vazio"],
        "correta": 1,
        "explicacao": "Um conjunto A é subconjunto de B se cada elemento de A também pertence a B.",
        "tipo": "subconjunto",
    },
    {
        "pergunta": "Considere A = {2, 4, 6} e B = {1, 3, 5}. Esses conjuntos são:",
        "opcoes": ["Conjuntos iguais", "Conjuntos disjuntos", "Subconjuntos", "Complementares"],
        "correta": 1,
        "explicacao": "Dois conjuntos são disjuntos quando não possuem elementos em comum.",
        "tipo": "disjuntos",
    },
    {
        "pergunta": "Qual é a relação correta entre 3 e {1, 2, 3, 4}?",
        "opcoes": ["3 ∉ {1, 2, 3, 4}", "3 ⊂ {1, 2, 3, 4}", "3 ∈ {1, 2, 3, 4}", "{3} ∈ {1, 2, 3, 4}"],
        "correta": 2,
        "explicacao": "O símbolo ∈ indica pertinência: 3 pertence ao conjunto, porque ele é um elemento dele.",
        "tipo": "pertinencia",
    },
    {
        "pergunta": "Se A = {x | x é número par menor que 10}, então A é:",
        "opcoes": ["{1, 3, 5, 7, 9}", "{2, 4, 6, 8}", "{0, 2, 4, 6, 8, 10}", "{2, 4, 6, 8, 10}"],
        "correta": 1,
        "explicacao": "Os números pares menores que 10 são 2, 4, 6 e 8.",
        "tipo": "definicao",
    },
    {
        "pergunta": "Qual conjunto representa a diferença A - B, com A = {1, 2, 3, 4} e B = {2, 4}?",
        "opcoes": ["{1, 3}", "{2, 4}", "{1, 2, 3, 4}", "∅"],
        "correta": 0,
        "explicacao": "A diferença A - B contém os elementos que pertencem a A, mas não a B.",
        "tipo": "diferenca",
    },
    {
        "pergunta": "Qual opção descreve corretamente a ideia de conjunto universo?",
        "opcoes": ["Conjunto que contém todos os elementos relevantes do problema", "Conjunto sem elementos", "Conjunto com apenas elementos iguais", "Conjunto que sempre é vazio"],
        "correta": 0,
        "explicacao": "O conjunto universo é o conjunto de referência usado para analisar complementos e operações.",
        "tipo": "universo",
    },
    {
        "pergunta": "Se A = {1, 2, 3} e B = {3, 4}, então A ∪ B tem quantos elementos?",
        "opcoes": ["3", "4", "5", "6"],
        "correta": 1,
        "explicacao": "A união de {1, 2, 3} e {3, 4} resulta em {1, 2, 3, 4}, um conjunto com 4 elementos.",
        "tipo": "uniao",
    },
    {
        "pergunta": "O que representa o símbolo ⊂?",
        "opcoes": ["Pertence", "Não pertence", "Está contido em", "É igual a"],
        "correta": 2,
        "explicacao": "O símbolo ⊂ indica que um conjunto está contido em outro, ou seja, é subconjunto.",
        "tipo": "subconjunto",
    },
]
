@@ -1,0 +1,287 @@
+import pygame
+
+from jogo import config as cfg
+from jogo.perguntas import QUESTOES
+from jogo.ui import BarraCronometro, Botao, DiagramaVenn, desenhar_texto, quebrar_texto
+
+
+class TelaBase:
+    def __init__(self, jogo):
+        self.jogo = jogo
+
+    def tratar_evento(self, evento):
+        pass
+
+    def atualizar(self, dt):
+        pass
+
+    def desenhar(self, tela):
+        pass
+
+
+class TelaMenu(TelaBase):
+    def __init__(self, jogo):
+        super().__init__(jogo)
+        self.font_titulo = pygame.font.SysFont("arial", 60, bold=True)
+        self.font_sub = pygame.font.SysFont("arial", 24)
+        self.font_botao = pygame.font.SysFont("arial", 22, bold=True)
+
+        self.botoes = [
+            Botao(420, 300, 260, 64, "JOGAR", cfg.COR_PRIMARIA, callback=self.jogo.iniciar_jogo, font=self.font_botao),
+            Botao(420, 385, 260, 64, "INSTRUÇÕES", cfg.COR_SECUNDARIA, callback=self.jogo.mostrar_instrucoes, font=self.font_botao),
+            Botao(420, 470, 260, 64, "SAIR", (175, 74, 88), callback=self.jogo.encerrar, font=self.font_botao),
+        ]
+
+    def tratar_evento(self, evento):
+        if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+            mouse_pos = pygame.mouse.get_pos()
+            for botao in self.botoes:
+                if botao.rect.collidepoint(mouse_pos):
+                    self.jogo.tocar("clique")
+                    botao.clicar()
+                    return
+
+    def atualizar(self, dt):
+        mouse_pos = pygame.mouse.get_pos()
+        for botao in self.botoes:
+            botao.atualizar(mouse_pos)
+
+    def desenhar(self, tela):
+        tela.fill(cfg.COR_BG)
+        pygame.draw.rect(tela, (18, 29, 43), (120, 80, 860, 560), border_radius=30)
+        pygame.draw.rect(tela, (30, 43, 61), (170, 190, 760, 240), border_radius=26)
+
+        desenhar_texto(tela, "CONJUNTOS", (cfg.LARGURA // 2, 145), self.font_titulo, cfg.COR_TEXTO, align="center")
+        desenhar_texto(tela, "EM JOGO", (cfg.LARGURA // 2, 210), self.font_titulo, cfg.COR_PRIMARIA, align="center")
+        desenhar_texto(tela, "Teste seus conhecimentos sobre conjuntos, união, interseção e lógica matemática.", (cfg.LARGURA // 2, 272), self.font_sub, cfg.COR_MUTED, align="center")
+
+        for botao in self.botoes:
+            botao.desenhar(tela)
+
+
+class TelaInstrucoes(TelaBase):
+    def __init__(self, jogo):
+        super().__init__(jogo)
+        self.font_titulo = pygame.font.SysFont("arial", 42, bold=True)
+        self.font_texto = pygame.font.SysFont("arial", 22)
+        self.font_botao = pygame.font.SysFont("arial", 20, bold=True)
+        self.botao_voltar = Botao(80, 620, 180, 52, "VOLTAR", (89, 101, 123), callback=self.jogo.mostrar_menu, font=self.font_botao)
+        self.itens = [
+            "• Você terá 30 segundos para responder cada questão.",
+            "• Cada acerto vale 10 pontos e ainda ganha 1 ponto por segundo restante.",
+            "• Sequências de acertos geram bônus extras de combo.",
+            "• Você pode responder com mouse ou usando as teclas 1 a 4 / A a D.",
+            "• Use ESC para voltar ao menu e F11 para alternar tela cheia.",
+        ]
+
+    def tratar_evento(self, evento):
+        if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+            if self.botao_voltar.rect.collidepoint(pygame.mouse.get_pos()):
+                self.jogo.tocar("clique")
+                self.botao_voltar.clicar()
+        elif evento.type == pygame.KEYDOWN:
+            if evento.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.jogo.mostrar_menu()
+
+    def atualizar(self, dt):
+        self.botao_voltar.atualizar(pygame.mouse.get_pos())
+
+    def desenhar(self, tela):
+        tela.fill(cfg.COR_BG)
+        pygame.draw.rect(tela, cfg.COR_PANEL, (60, 60, 980, 560), border_radius=28)
+        desenhar_texto(tela, "INSTRUÇÕES", (cfg.LARGURA // 2, 110), self.font_titulo, cfg.COR_TEXTO, align="center")
+
+        y = 170
+        for texto in self.itens:
+            for linha in quebrar_texto(self.font_texto, texto, 880):
+                desenhar_texto(tela, linha, (120, y), self.font_texto, cfg.COR_MUTED)
+                y += 32
+            y += 8
+
+        self.botao_voltar.desenhar(tela)
+
+
+class TelaQuiz(TelaBase):
+    def __init__(self, jogo):
+        super().__init__(jogo)
+        self.font_titulo = pygame.font.SysFont("arial", 30, bold=True)
+        self.font_texto = pygame.font.SysFont("arial", 24)
+        self.font_opcao = pygame.font.SysFont("arial", 22)
+        self.font_botao = pygame.font.SysFont("arial", 20, bold=True)
+
+        self.perguntas = QUESTOES
+        self.indice = 0
+        self.pontos = 0
+        self.acertos = 0
+        self.combo = 0
+        self.tempo = 30.0
+        self.estado = "rodando"
+        self.feedback = ""
+        self.ultima_resposta = None
+
+        self.botao_continuar = Botao(835, 600, 210, 54, "CONTINUAR", cfg.COR_SUCESSO, font=self.font_botao, callback=self.proximo)
+        self.botao_voltar = Botao(55, 600, 140, 54, "MENU", (88, 97, 113), font=self.font_botao, callback=self.jogo.mostrar_menu)
+
+    def proximo(self):
+        if self.indice < len(self.perguntas) - 1:
+            self.indice += 1
+            self.tempo = 30.0
+            self.estado = "rodando"
+            self.feedback = ""
+            self.ultima_resposta = None
+        else:
+            self.jogo.mostrar_resultado({"pontos": self.pontos, "acertos": self.acertos, "total": len(self.perguntas)})
+
+    def responder(self, indice):
+        if self.estado != "rodando":
+            return
+
+        pergunta = self.perguntas[self.indice]
+        correta = pergunta["correta"]
+
+        if indice == correta:
+            self.combo += 1
+            self.acertos += 1
+            self.pontos += 10 + int(self.tempo) + max(0, self.combo - 1) * 2
+            self.feedback = "Correto! " + pergunta["explicacao"]
+            self.jogo.tocar("acerto")
+        else:
+            self.combo = 0
+            self.feedback = "Incorreto. " + pergunta["explicacao"]
+            self.jogo.tocar("erro")
+
+        self.ultima_resposta = indice
+        self.estado = "feedback"
+
+    def tratar_evento(self, evento):
+        if self.estado == "feedback":
+            if evento.type == pygame.KEYDOWN and evento.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.proximo()
+            elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                if self.botao_continuar.rect.collidepoint(pygame.mouse.get_pos()):
+                    self.jogo.tocar("clique")
+                    self.botao_continuar.clicar()
+            return
+
+        if evento.type == pygame.KEYDOWN:
+            if evento.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
+                self.responder(evento.key - pygame.K_1)
+            elif evento.key in (pygame.K_a, pygame.K_b, pygame.K_c, pygame.K_d):
+                self.responder(ord(evento.unicode.lower()) - ord("a"))
+            elif evento.key == pygame.K_ESCAPE:
+                self.jogo.mostrar_menu()
+        elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+            pos = pygame.mouse.get_pos()
+            for idx, _ in enumerate(self.perguntas[self.indice]["opcoes"]):
+                rect = pygame.Rect(160, 330 + idx * 72, 570, 58)
+                if rect.collidepoint(pos):
+                    self.responder(idx)
+                    return
+            if self.botao_voltar.rect.collidepoint(pos):
+                self.jogo.tocar("clique")
+                self.botao_voltar.clicar()
+
+    def atualizar(self, dt):
+        if self.estado == "rodando":
+            self.tempo -= dt
+            if self.tempo <= 0:
+                self.tempo = 0
+                pergunta = self.perguntas[self.indice]
+                self.combo = 0
+                self.feedback = "Tempo esgotado! " + pergunta["explicacao"]
+                self.estado = "feedback"
+                self.jogo.tocar("tempo")
+
+        self.botao_continuar.atualizar(pygame.mouse.get_pos())
+        self.botao_voltar.atualizar(pygame.mouse.get_pos())
+
+    def desenhar(self, tela):
+        tela.fill(cfg.COR_BG)
+        pergunta = self.perguntas[self.indice]
+
+        pygame.draw.rect(tela, cfg.COR_PANEL, (60, 60, 980, 600), border_radius=28)
+        desenhar_texto(tela, f"Pergunta {self.indice + 1} / {len(self.perguntas)}", (88, 88), self.font_titulo, cfg.COR_AVISO)
+        desenhar_texto(tela, f"Pontos: {self.pontos}", (1012, 88), self.font_titulo, cfg.COR_SUCESSO, align="right")
+
+        barra = BarraCronometro(170, 140, 760)
+        barra.atualizar(self.tempo / 30.0)
+        barra.desenhar(tela)
+
+        caixa = pygame.Rect(170, 190, 760, 110)
+        pygame.draw.rect(tela, cfg.COR_CARD_2, caixa, border_radius=18)
+        for i, linha in enumerate(quebrar_texto(self.font_texto, pergunta["pergunta"], 700)):
+            desenhar_texto(tela, linha, (200, 215 + i * 28), self.font_texto, cfg.COR_TEXTO)
+
+        diagrama = DiagramaVenn(760, 320, 170, 150)
+        diagrama.desenhar(tela, pergunta["tipo"] if pergunta["tipo"] in ("uniao", "intersecao", "complemento") else None)
+
+        for idx, opcao in enumerate(pergunta["opcoes"]):
+            rect = pygame.Rect(160, 330 + idx * 72, 570, 58)
+            cor = cfg.COR_CARD
+            if self.estado == "feedback":
+                if idx == pergunta["correta"]:
+                    cor = cfg.COR_SUCESSO
+                elif self.ultima_resposta == idx:
+                    cor = cfg.COR_ERRO
+            pygame.draw.rect(tela, cor, rect, border_radius=18)
+            pygame.draw.rect(tela, cfg.COR_BORDA, rect, 2, border_radius=18)
+            desenhar_texto(tela, f"{idx + 1}. {opcao}", (190, 343 + idx * 72), self.font_opcao, cfg.COR_TEXTO)
+
+        if self.estado == "feedback":
+            caixa_feedback = pygame.Rect(160, 535, 760, 95)
+            pygame.draw.rect(tela, (24, 34, 47), caixa_feedback, border_radius=18)
+            for i, linha in enumerate(quebrar_texto(self.font_texto, self.feedback, 700)[:2]):
+                desenhar_texto(tela, linha, (190, 555 + i * 26), self.font_texto, cfg.COR_TEXTO)
+            self.botao_continuar.desenhar(tela)
+
+        self.botao_voltar.desenhar(tela)
+
+
+class TelaResultado(TelaBase):
+    def __init__(self, jogo, dados):
+        super().__init__(jogo)
+        self.dados = dados
+        self.font_titulo = pygame.font.SysFont("arial", 40, bold=True)
+        self.font_texto = pygame.font.SysFont("arial", 24)
+        self.font_botao = pygame.font.SysFont("arial", 22, bold=True)
+
+        self.botao_reiniciar = Botao(410, 470, 280, 64, "JOGAR NOVAMENTE", cfg.COR_PRIMARIA, callback=self.jogo.iniciar_jogo, font=self.font_botao)
+        self.botao_menu = Botao(410, 550, 280, 64, "MENU PRINCIPAL", cfg.COR_SECUNDARIA, callback=self.jogo.mostrar_menu, font=self.font_botao)
+
+    def tratar_evento(self, evento):
+        if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+            if self.botao_reiniciar.rect.collidepoint(pygame.mouse.get_pos()):
+                self.jogo.tocar("clique")
+                self.botao_reiniciar.clicar()
+                return
+            if self.botao_menu.rect.collidepoint(pygame.mouse.get_pos()):
+                self.jogo.tocar("clique")
+                self.botao_menu.clicar()
+                return
+        elif evento.type == pygame.KEYDOWN:
+            if evento.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.jogo.iniciar_jogo()
+            elif evento.key == pygame.K_ESCAPE:
+                self.jogo.mostrar_menu()
+
+    def atualizar(self, dt):
+        self.botao_reiniciar.atualizar(pygame.mouse.get_pos())
+        self.botao_menu.atualizar(pygame.mouse.get_pos())
+
+    def desenhar(self, tela):
+        tela.fill(cfg.COR_BG)
+        pygame.draw.rect(tela, cfg.COR_PANEL, (140, 90, 820, 500), border_radius=30)
+        desenhar_texto(tela, "RESULTADO FINAL", (cfg.LARGURA // 2, 150), self.font_titulo, cfg.COR_TEXTO, align="center")
+        desenhar_texto(tela, f"Pontos: {self.dados['pontos']}", (cfg.LARGURA // 2, 220), self.font_texto, cfg.COR_SUCESSO, align="center")
+        desenhar_texto(tela, f"Acertos: {self.dados['acertos']} / {self.dados['total']}", (cfg.LARGURA // 2, 270), self.font_texto, cfg.COR_TEXTO, align="center")
+
+        if self.jogo.novo_recorde:
+            texto = "NOVO RECORDE!"
+            cor = cfg.COR_AVISO
+        else:
+            texto = f"Recorde atual: {self.jogo.recorde}"
+            cor = cfg.COR_MUTED
+        desenhar_texto(tela, texto, (cfg.LARGURA // 2, 330), self.font_texto, cor, align="center")
+
+        self.botao_reiniciar.desenhar(tela)
+        self.botao_menu.desenhar(tela)
